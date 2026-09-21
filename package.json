@@ -1,0 +1,23 @@
+{
+  "name": "taiwan-weather-forecast-cwa",
+  "version": "1.0.0",
+  "description": "Taiwan Weather Forecast GIS Dashboard with CWA Open Data, Leaflet GIS, and Vercel Serverless",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve .",
+    "dev": "serve ."
+  },
+  "keywords": [
+    "cwa",
+    "weather",
+    "taiwan",
+    "gis",
+    "leaflet",
+    "vercel"
+  ],
+  "author": "damondtsai",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}

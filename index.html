@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>首頁 | 交通部中央氣象署 台灣氣象預報 GIS 資訊網</title>
+  
+  <!-- Google Fonts: Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  
+  <!-- Custom Style -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Top CWA V8 Brand Navbar -->
+  <header class="cwa-navbar">
+    <div class="cwa-container navbar-inner">
+      <div class="cwa-brand">
+        <div class="cwa-logo">
+          <i class="fa-solid fa-cloud-sun-rain"></i>
+        </div>
+        <div class="cwa-titles">
+          <h1 class="cwa-main-title">交通部中央氣象署 氣象預報全球資訊網</h1>
+          <p class="cwa-sub-title">Taiwan Weather Forecast GIS Dashboard · 今明 36 小時天氣預報</p>
+        </div>
+      </div>
+      
+      <div class="cwa-meta-controls">
+        <div id="liveStatusBadge" class="status-badge badge-loading">
+          <span class="pulse-dot"></span> 連線中...
+        </div>
+        <div class="time-clock" id="clockDisplay">
+          <i class="fa-regular fa-clock"></i> 載入中...
+        </div>
+        <button id="btnRefresh" class="btn-refresh" title="立即更新氣象資料">
+          <i class="fa-solid fa-rotate"></i> 更新資料
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Container -->
+  <main class="cwa-container main-content">
+    
+    <!-- Notice Bar / Top Alert -->
+    <div id="alertBanner" class="alert-banner" style="display: none;">
+      <i class="fa-solid fa-circle-info"></i>
+      <span id="alertMessage">載入提示訊息中...</span>
+    </div>
+
+    <!-- Quick County Selector & Metric Control Bar -->
+    <section class="control-bar">
+      <div class="control-group">
+        <label for="selectCounty"><i class="fa-solid fa-location-dot"></i> 選擇縣市：</label>
+        <select id="selectCounty" class="cwa-select">
+          <!-- Populated by JS -->
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label><i class="fa-solid fa-layer-group"></i> 地圖圖層指標：</label>
+        <div class="btn-group" id="metricTabs">
+          <button class="btn-pill active" data-metric="max_t">最高氣溫</button>
+          <button class="btn-pill" data-metric="min_t">最低氣溫</button>
+          <button class="btn-pill" data-metric="pop">降雨機率</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label><i class="fa-solid fa-calendar-day"></i> 預報時段：</label>
+        <div class="btn-group" id="periodTabs">
+          <button class="btn-pill active" data-period="0">時段一 (今晚至明晨)</button>
+          <button class="btn-pill" data-period="1">時段二 (明日白天)</button>
+          <button class="btn-pill" data-period="2">時段三 (明日晚上)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Grid Layout: Left GIS Map, Right Selected County Forecasts -->
+    <div class="dashboard-grid">
+      
+      <!-- Left: Interactive Taiwan GIS Map -->
+      <section class="panel map-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-map-location-dot"></i> 台灣全區氣象 GIS 圖台</h2>
+          <span class="panel-tag" id="currentMapMetricLabel">最高氣溫圖層</span>
+        </div>
+        
+        <div id="taiwanMap" class="map-container"></div>
+
+        <!-- Custom Map Legend -->
+        <div class="map-legend" id="mapLegend">
+          <div class="legend-title" id="legendTitle">氣溫分級 (°C)</div>
+          <div class="legend-items" id="legendItems">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Detailed County Weather Overview & Trend Chart -->
+      <section class="panel detail-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-cloud-sun"></i> 【<span id="selectedCountyTitle">臺中市</span>】天氣預報概況</h2>
+          <span class="panel-tag">今明 36 小時</span>
+        </div>
+
+        <!-- Hero Summary Card -->
+        <div id="heroSummary" class="hero-summary">
+          <div class="hero-left">
+            <div class="hero-icon" id="heroIcon">⛅</div>
+            <div>
+              <div class="hero-county" id="heroCounty">臺中市</div>
+              <div class="hero-desc" id="heroDesc">多雲時晴 · 舒適</div>
+            </div>
+          </div>
+          <div class="hero-right">
+            <div class="hero-stat-box">
+              <span class="label">預估氣溫</span>
+              <span class="value temp" id="heroTemp">25 ~ 33°C</span>
+            </div>
+            <div class="hero-stat-box">
+              <span class="label">降雨機率</span>
+              <span class="value pop" id="heroPop">💧 20%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-Period Forecast Cards -->
+        <div class="period-cards-grid" id="periodCards">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Chart.js 36-Hour Temperature & Rain Trend Chart -->
+        <div class="chart-wrapper">
+          <div class="chart-header">
+            <h3><i class="fa-solid fa-chart-line"></i> 36 小時氣溫與降雨機率趨勢圖</h3>
+          </div>
+          <div class="chart-canvas-container">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Full 22 Counties Weather Matrix Table -->
+    <section class="panel table-panel">
+      <div class="panel-header table-panel-header">
+        <h2><i class="fa-solid fa-table-list"></i> 全台 22 縣市天氣預報清單</h2>
+        
+        <div class="table-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="tableSearchInput" placeholder="搜尋縣市名稱 (如: 臺中、高雄)...">
+        </div>
+      </div>
+
+      <!-- Region Filter Tabs -->
+      <div class="region-tabs" id="regionTabs">
+        <button class="region-tab active" data-region="all">全台 22 縣市</button>
+        <button class="region-tab" data-region="北部">🌲 北部地區</button>
+        <button class="region-tab" data-region="中部">🌿 中部地區</button>
+        <button class="region-tab" data-region="南部">☀️ 南部地區</button>
+        <button class="region-tab" data-region="東部">🌊 東部地區</button>
+        <button class="region-tab" data-region="離島">🏝️ 離島地區</button>
+      </div>
+
+      <!-- Weather Matrix Table -->
+      <div class="table-responsive">
+        <table class="cwa-table" id="weatherTable">
+          <thead>
+            <tr>
+              <th>縣市</th>
+              <th>分區</th>
+              <th>預報時段</th>
+              <th>天氣狀況</th>
+              <th>最低氣溫</th>
+              <th>最高氣溫</th>
+              <th>降雨機率</th>
+              <th>舒適度描述</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="weatherTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="cwa-footer">
+    <div class="cwa-container footer-inner">
+      <p>資料來源：交通部中央氣象署 CWA Open Data API (F-C0032-001) · 座標系統：WGS84 (EPSG:4326)</p>
+      <p>Taiwan Weather Forecast GIS Dashboard © 2026</p>
+    </div>
+  </footer>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Custom App JS -->
+  <script src="js/app.js"></script>
+</body>
+</html>
