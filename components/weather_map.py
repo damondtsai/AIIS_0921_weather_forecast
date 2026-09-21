@@ -151,7 +151,7 @@ def render_weather_map(
     m = folium.Map(
         location=[23.7, 120.95],
         zoom_start=7.4,
-        tiles="CartoDB positron",
+        tiles="OpenStreetMap",
         control_scale=True,
     )
     Fullscreen(position="topright").add_to(m)
