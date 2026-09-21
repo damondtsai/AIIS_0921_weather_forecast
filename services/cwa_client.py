@@ -88,7 +88,13 @@ def fetch_forecast_data(
         params["locationName"] = location_name
 
     try:
-        response = requests.get(endpoint, params=params, timeout=20)
+        try:
+            response = requests.get(endpoint, params=params, timeout=20)
+        except requests.exceptions.SSLError:
+            # 針對特定平台環境或過渡證書進行 SSL 容錯重試
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            response = requests.get(endpoint, params=params, timeout=20, verify=False)
         
         if response.status_code == 200:
             try:
@@ -101,7 +107,7 @@ def fetch_forecast_data(
                         return (load_sample_data(), "demo", f"{err_msg} 已自動降級為示範資料。")
                     return ({}, "error", err_msg)
             except json.JSONDecodeError:
-                err_msg = "CWA API 回傳非有效 JSON 格式。"
+                err_msg = "CWA API 回傳非有效 JSON格式。"
                 if fallback_to_sample:
                     return (load_sample_data(), "demo", f"{err_msg} 已自動降級為示範資料。")
                 return ({}, "error", err_msg)
