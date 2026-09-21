@@ -1,6 +1,6 @@
 """
-Weather GIS Map Component
-使用 Folium 與台灣 22 縣市 GeoJSON 繪製互動式氣象地圖，支援指標切換、分級著色、懸浮提示與詳細氣象 Popup。
+Weather GIS Map Component (CWA V8 Style)
+仿照中央氣象署全球資訊網 V8 版首頁，呈現台灣地圖與各縣市氣象微章、分級著色與詳細 Popup。
 """
 import json
 import os
@@ -12,6 +12,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from services.location_service import normalize_location_name
+from components.weather_cards import get_wx_icon
 
 GEOJSON_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -21,58 +22,47 @@ GEOJSON_PATH = os.path.join(
 
 
 def _get_temp_color(temp: Optional[float]) -> str:
-    """
-    溫度分級顏色：
-    - < 20°C: 藍色 (#3B82F6)
-    - 20–25°C: 綠色 (#10B981)
-    - 25–30°C: 橙色 (#F59E0B)
-    - > 30°C: 紅色 (#EF4444)
-    - 無資料: 灰色 (#9CA3AF)
-    """
+    """溫度分級顏色 (CWA 風格)。"""
     if temp is None:
-        return "#9CA3AF"
-    if temp < 20:
-        return "#3B82F6"
-    elif temp <= 25:
+        return "#94A3B8"
+    if temp < 18:
+        return "#2563EB"
+    elif temp < 24:
+        return "#0284C7"
+    elif temp < 28:
         return "#10B981"
-    elif temp <= 30:
+    elif temp <= 32:
         return "#F59E0B"
     else:
         return "#EF4444"
 
 
 def _get_pop_color(pop: Optional[float]) -> str:
-    """
-    降雨機率分級顏色：
-    - 0–20%: 淺藍 (#93C5FD)
-    - 20–50%: 藍色 (#3B82F6)
-    - 50–80%: 深藍 (#1D4ED8)
-    - > 80%: 紫色 (#6D28D9)
-    - 無資料: 灰色 (#9CA3AF)
-    """
+    """降雨機率分級顏色 (CWA 風格)。"""
     if pop is None:
-        return "#9CA3AF"
+        return "#94A3B8"
     if pop < 20:
-        return "#93C5FD"
-    elif pop <= 50:
-        return "#3B82F6"
-    elif pop <= 80:
-        return "#1D4ED8"
+        return "#BAE6FD"
+    elif pop <= 40:
+        return "#38BDF8"
+    elif pop <= 70:
+        return "#0284C7"
     else:
-        return "#6D28D9"
+        return "#4338CA"
 
 
-def _build_popup_html(county_name: str, forecast: Optional[Dict[str, Any]]) -> str:
-    """產生精美繁體中文氣象資訊 Popup HTML。"""
+def _build_cwa_popup(county_name: str, forecast: Optional[Dict[str, Any]]) -> str:
+    """產生 CWA 官方氣象署風格之彈出資訊窗。"""
     if not forecast:
         return f"""
-        <div style="font-family: sans-serif; min-width: 180px; padding: 6px;">
-            <h4 style="margin:0 0 6px 0; color:#1E3A8A;">{county_name}</h4>
-            <p style="color:#6B7280; font-size:12px; margin:0;">目前時段無此縣市預報資料</p>
+        <div style="font-family: sans-serif; padding: 6px; min-width: 160px;">
+            <b style="color:#0B4F8A; font-size:14px;">{county_name}</b>
+            <p style="color:#64748B; font-size:12px; margin:4px 0 0 0;">目前無預報資料</p>
         </div>
         """
 
     wx = forecast.get("wx") or "--"
+    icon = get_wx_icon(wx)
     pop = forecast.get("pop")
     pop_str = f"{int(pop)}%" if pop is not None else "--"
     min_t = forecast.get("min_t")
@@ -85,35 +75,37 @@ def _build_popup_html(county_name: str, forecast: Optional[Dict[str, Any]]) -> s
     fetched_at = forecast.get("fetched_at", "").replace("T", " ")[:19]
 
     return f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-                min-width: 230px; padding: 8px 10px; line-height: 1.5; color: #1F2937;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #3B82F6; padding-bottom: 4px; margin-bottom: 6px;">
-            <h3 style="margin: 0; color: #1E3A8A; font-size: 16px; font-weight: 700;">{county_name}</h3>
-            <span style="background:#DBEAFE; color:#1D4ED8; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:600;">{wx}</span>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                min-width: 220px; padding: 10px; color: #1E293B; line-height: 1.4;">
+        <div style="background: linear-gradient(135deg, #0B4F8A 0%, #0284C7 100%);
+                    color: white; padding: 8px 12px; border-radius: 8px 8px 0 0; margin: -10px -10px 10px -10px;
+                    display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 16px; font-weight: 800;">{county_name}</span>
+            <span style="font-size: 20px;">{icon}</span>
         </div>
-        <div style="font-size: 12px; color: #4B5563; margin-bottom: 6px;">
-            時段: {start_t} ~ {end_t}
+        <div style="font-size: 12px; color: #64748B; margin-bottom: 8px;">
+            🕒 {start_t[5:]} ~ {end_t[5:]}
         </div>
-        <table style="width:100%; font-size:12px; border-collapse:collapse; margin-bottom: 6px;">
-            <tr>
-                <td style="color:#6B7280; padding:2px 0;">最高溫度:</td>
-                <td style="font-weight:700; color:#DC2626; text-align:right;">{max_t_str}</td>
-            </tr>
-            <tr>
-                <td style="color:#6B7280; padding:2px 0;">最低溫度:</td>
-                <td style="font-weight:700; color:#2563EB; text-align:right;">{min_t_str}</td>
-            </tr>
-            <tr>
-                <td style="color:#6B7280; padding:2px 0;">降雨機率:</td>
-                <td style="font-weight:700; color:#0D9488; text-align:right;">{pop_str}</td>
-            </tr>
-            <tr>
-                <td style="color:#6B7280; padding:2px 0;">舒適度:</td>
-                <td style="font-weight:600; color:#D97706; text-align:right;">{ci}</td>
-            </tr>
-        </table>
-        <div style="font-size: 10px; color: #9CA3AF; border-top: 1px dashed #E5E7EB; padding-top: 4px;">
-            最後更新: {fetched_at}
+        <div style="background: #F1F5F9; border-radius: 6px; padding: 8px; margin-bottom: 8px; font-size: 13px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
+                <span style="color:#64748B;">天氣狀況:</span>
+                <b style="color:#0F172A;">{wx}</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
+                <span style="color:#64748B;">溫度區間:</span>
+                <b style="color:#DC2626;">{min_t_str} ~ {max_t_str}</b>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
+                <span style="color:#64748B;">降雨機率:</span>
+                <b style="color:#0284C7;">💧 {pop_str}</b>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+                <span style="color:#64748B;">舒適度:</span>
+                <b style="color:#D97706;">{ci}</b>
+            </div>
+        </div>
+        <div style="font-size: 10px; color: #94A3B8; text-align: right;">
+            資料來源：中央氣象署 ({fetched_at[5:16]})
         </div>
     </div>
     """
@@ -125,21 +117,16 @@ def render_weather_map(
     highlight_county: Optional[str] = None
 ) -> None:
     """
-    建立並顯示 Folium GIS 台灣氣象地圖。
-    
-    參數:
-    - slot_df: 特定預報時段之各縣市 DataFrame
-    - metric_type: "最高溫" | "最低溫" | "降雨機率"
-    - highlight_county: 目前選定的縣市名稱
+    建立並顯示 CWA V8 風格之互動氣象 GIS 地圖。
     """
     if not os.path.exists(GEOJSON_PATH):
-        st.error("找不到 GeoJSON 地圖資料檔 (data/taiwan_counties.geojson)。")
+        st.error("找不到 GeoJSON 地圖圖資。")
         return
 
     with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
         geojson_data = json.load(f)
 
-    # 建立縣市預報字典以供快速匹配
+    # 建立縣市預報字典
     forecast_dict: Dict[str, Dict[str, Any]] = {}
     if not slot_df.empty:
         for _, row in slot_df.iterrows():
@@ -147,16 +134,17 @@ def render_weather_map(
             if norm_name:
                 forecast_dict[norm_name] = row.to_dict()
 
-    # 初始建立地圖 (中心設於台灣中部)
+    # 地圖底圖：採用淡雅簡約底圖，突出台灣各縣市輪廓
     m = folium.Map(
         location=[23.7, 120.95],
         zoom_start=7.4,
-        tiles="OpenStreetMap",
+        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         control_scale=True,
     )
     Fullscreen(position="topright").add_to(m)
 
-    # 根據選定指標為 GeoJSON 各 Feature 設定樣式
+    # 樣式定義函式
     def style_function(feature):
         props = feature.get("properties", {})
         raw_name = props.get("COUNTYNAME") or props.get("name")
@@ -176,87 +164,96 @@ def render_weather_map(
         is_highlight = (c_name == highlight_county)
         return {
             "fillColor": fill_color,
-            "color": "#1E3A8A" if is_highlight else "#64748B",
-            "weight": 3.5 if is_highlight else 1.2,
+            "color": "#0B4F8A" if is_highlight else "#94A3B8",
+            "weight": 3.0 if is_highlight else 1.0,
             "fillOpacity": 0.85 if is_highlight else 0.65,
         }
 
-    # 建立 GeoJson 圖層與 Popup / Tooltip
+    # 加入各縣市 Polygon 與天氣標籤 Badge
     for feature in geojson_data.get("features", []):
         props = feature.get("properties", {})
         raw_name = props.get("COUNTYNAME") or props.get("name")
         c_name = normalize_location_name(raw_name)
         fc = forecast_dict.get(c_name)
 
-        # 浮動提示文字
-        if metric_type == "最高溫":
-            metric_val = f"{fc.get('max_t')}°C" if (fc and fc.get('max_t') is not None) else "無資料"
-        elif metric_type == "最低溫":
-            metric_val = f"{fc.get('min_t')}°C" if (fc and fc.get('min_t') is not None) else "無資料"
-        else:
-            metric_val = f"{int(fc.get('pop'))}%" if (fc and fc.get('pop') is not None) else "無資料"
-
         wx_desc = fc.get("wx", "") if fc else ""
-        tooltip_txt = f"<b>{c_name}</b> | {metric_type}: {metric_val} {('(' + wx_desc + ')') if wx_desc else ''}"
+        icon = get_wx_icon(wx_desc)
+        min_t = fc.get("min_t")
+        max_t = fc.get("max_t")
+        pop = fc.get("pop")
 
-        popup_html = _build_popup_html(c_name, fc)
-        popup = folium.Popup(folium.Html(popup_html, script=True), max_width=300)
+        temp_text = f"{int(min_t)}~{int(max_t)}°" if (min_t is not None and max_t is not None) else ""
+        pop_text = f"{int(pop)}%" if pop is not None else ""
 
-        # 建立單一 Feature 圖層
-        geo_feature = folium.GeoJson(
+        tooltip_txt = f"<b>{c_name}</b> · {wx_desc} · {temp_text} (降雨: {pop_text})"
+        popup_html = _build_cwa_popup(c_name, fc)
+        popup = folium.Popup(folium.Html(popup_html, script=True), max_width=280)
+
+        # Polygon 圖層
+        folium.GeoJson(
             feature,
             style_function=style_function,
             tooltip=folium.Tooltip(tooltip_txt),
             popup=popup,
             name=c_name
-        )
-        geo_feature.add_to(m)
+        ).add_to(m)
 
-        # 若為被選定縣市，在中心點放置醒目 Pulse 標記
-        if c_name == highlight_county and props.get("lat") and props.get("lon"):
-            folium.CircleMarker(
-                location=[props["lat"], props["lon"]],
-                radius=8,
-                color="#EF4444",
-                fill=True,
-                fill_color="#FDE047",
-                fill_opacity=0.9,
-                weight=3,
+        # 在縣市中心點加入 CWA 氣象膠囊標籤 (Weather Pill)
+        lat = props.get("lat")
+        lon = props.get("lon")
+        if lat and lon:
+            is_highlight = (c_name == highlight_county)
+            border_style = "2px solid #DC2626; box-shadow: 0 0 8px rgba(220,38,38,0.6);" if is_highlight else "1px solid #CBD5E1;"
+            bg_color = "#FFFBEB" if is_highlight else "#FFFFFF"
+            
+            # CWA 徽章 HTML
+            div_html = f"""
+            <div style="background: {bg_color}; border: {border_style}; border-radius: 14px;
+                        padding: 2px 6px; font-family: sans-serif; font-size: 11px; font-weight: 700;
+                        white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.15); display: flex;
+                        align-items: center; gap: 3px; cursor: pointer; color: #1E293B;">
+                <span>{icon}</span>
+                <span>{c_name[:2]}</span>
+                <span style="color: #DC2626; font-size: 10px;">{int(max_t) if max_t is not None else ''}°</span>
+            </div>
+            """
+            
+            folium.Marker(
+                location=[lat, lon],
+                icon=folium.DivIcon(html=div_html, icon_size=(70, 20), icon_anchor=(35, 10)),
                 popup=popup,
-                tooltip=f"★ 目前選定: {c_name}"
+                tooltip=tooltip_txt
             ).add_to(m)
 
-    # 建立自訂圖例 HTML
+    # CWA 風格圖例
+    legend_title = f"氣溫分級 (°C)" if metric_type in ("最高溫", "最低溫") else "降雨機率 (%)"
     if metric_type in ("最高溫", "最低溫"):
-        legend_html = """
-        <div style="position: fixed; bottom: 30px; right: 20px; z-index: 1000;
-                    background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(4px);
-                    padding: 10px 14px; border-radius: 8px; border: 1px solid #E2E8F0;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 12px; font-family: sans-serif;">
-            <div style="font-weight: 700; margin-bottom: 6px; color: #1E293B;">氣溫圖例 (°C)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#EF4444; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> > 30°C (高溫炎熱)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#F59E0B; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 25 ~ 30°C (溫暖)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#10B981; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 20 ~ 25°C (舒適)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#3B82F6; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> < 20°C (偏涼)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#9CA3AF; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 無資料</div>
-        </div>
+        legend_items = """
+        <div><span style="display:inline-block;width:12px;height:12px;background:#EF4444;border-radius:2px;margin-right:5px;"></span> > 32°C (高溫)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#F59E0B;border-radius:2px;margin-right:5px;"></span> 28 ~ 32°C (炎熱)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#10B981;border-radius:2px;margin-right:5px;"></span> 24 ~ 28°C (溫和)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#0284C7;border-radius:2px;margin-right:5px;"></span> 18 ~ 24°C (舒適)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#2563EB;border-radius:2px;margin-right:5px;"></span> < 18°C (稍涼)</div>
         """
     else:
-        legend_html = """
-        <div style="position: fixed; bottom: 30px; right: 20px; z-index: 1000;
-                    background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(4px);
-                    padding: 10px 14px; border-radius: 8px; border: 1px solid #E2E8F0;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 12px; font-family: sans-serif;">
-            <div style="font-weight: 700; margin-bottom: 6px; color: #1E293B;">降雨機率圖例 (%)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#6D28D9; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> > 80% (極易降雨)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#1D4ED8; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 50 ~ 80% (高降雨率)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#3B82F6; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 20 ~ 50% (局部可能降雨)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#93C5FD; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 0 ~ 20% (降雨機率低)</div>
-            <div><span style="display:inline-block; width:14px; height:14px; background:#9CA3AF; border-radius:3px; vertical-align:middle; margin-right:6px;"></span> 無資料</div>
-        </div>
+        legend_items = """
+        <div><span style="display:inline-block;width:12px;height:12px;background:#4338CA;border-radius:2px;margin-right:5px;"></span> > 70% (高機率降雨)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#0284C7;border-radius:2px;margin-right:5px;"></span> 40 ~ 70% (局部陣雨)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#38BDF8;border-radius:2px;margin-right:5px;"></span> 20 ~ 40% (零星短暫雨)</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#BAE6FD;border-radius:2px;margin-right:5px;"></span> 0 ~ 20% (降雨機率低)</div>
         """
 
+    legend_html = f"""
+    <div style="position: fixed; bottom: 25px; right: 20px; z-index: 1000;
+                background: rgba(255, 255, 255, 0.95); border: 1px solid #CBD5E1;
+                border-radius: 8px; padding: 10px 14px; font-size: 11px; font-family: sans-serif;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.12); line-height: 1.6;">
+        <div style="font-weight: 800; color: #0B4F8A; margin-bottom: 4px; border-bottom: 1px solid #E2E8F0; padding-bottom: 2px;">
+            {legend_title}
+        </div>
+        {legend_items}
+    </div>
+    """
     m.get_root().html.add_child(folium.Element(legend_html))
 
-    # 渲染至 Streamlit
-    st_folium(m, width="100%", height=560, returned_objects=[])
+    st_folium(m, width="100%", height=580, returned_objects=[])
