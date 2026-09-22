@@ -5,7 +5,17 @@ let clientInstance: Client | null = null;
 
 export function getDb(): Client {
   if (!clientInstance) {
-    const url = process.env.DATABASE_URL || "file:weather.db";
+    let url = process.env.DATABASE_URL;
+
+    // Handle Vercel Serverless environment where current working directory is read-only
+    if (!url || url === "file:weather.db") {
+      if (process.env.VERCEL === "1") {
+        url = "file:/tmp/weather.db";
+      } else {
+        url = "file:weather.db";
+      }
+    }
+
     const authToken = process.env.DATABASE_AUTH_TOKEN || undefined;
 
     clientInstance = createClient({
@@ -17,25 +27,29 @@ export function getDb(): Client {
 }
 
 export async function initDb(): Promise<void> {
-  const db = getDb();
-  await db.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS forecasts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      location_name TEXT NOT NULL,
-      start_time TEXT NOT NULL,
-      end_time TEXT NOT NULL,
-      weather TEXT,
-      weather_code TEXT,
-      pop INTEGER,
-      min_t REAL,
-      max_t REAL,
-      comfort TEXT,
-      fetched_at TEXT NOT NULL,
-      UNIQUE(location_name, start_time, end_time)
-    );
-    CREATE INDEX IF NOT EXISTS idx_forecasts_location_start
-    ON forecasts(location_name, start_time);
-  `);
+  try {
+    const db = getDb();
+    await db.executeMultiple(`
+      CREATE TABLE IF NOT EXISTS forecasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        location_name TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        weather TEXT,
+        weather_code TEXT,
+        pop INTEGER,
+        min_t REAL,
+        max_t REAL,
+        comfort TEXT,
+        fetched_at TEXT NOT NULL,
+        UNIQUE(location_name, start_time, end_time)
+      );
+      CREATE INDEX IF NOT EXISTS idx_forecasts_location_start
+      ON forecasts(location_name, start_time);
+    `);
+  } catch (err) {
+    console.warn("initDb notice:", err);
+  }
 }
 
 export async function upsertForecasts(records: ForecastRecord[]): Promise<number> {

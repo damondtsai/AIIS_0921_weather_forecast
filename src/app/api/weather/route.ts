@@ -12,18 +12,30 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
     const searchParams = request.nextUrl.searchParams;
     const locationQuery = searchParams.get("location") || searchParams.get("locationName");
 
-    // Query database
-    let forecasts = await queryForecasts(locationQuery || undefined);
+    let forecasts: ForecastRecord[] = [];
 
-    // If database is empty, auto-populate from CWA
+    // Try DB first
+    try {
+      forecasts = await queryForecasts(locationQuery || undefined);
+    } catch (dbErr) {
+      console.warn("DB query failed, fetching directly from CWA/sample:", dbErr);
+    }
+
+    // If database is empty or failed, fetch directly from CWA / sample dataset
     if (!forecasts || forecasts.length === 0) {
       try {
         const { data: cwaData } = await fetchCwaWeather();
         const records = normalizeCwaData(cwaData);
-        await upsertForecasts(records);
-        forecasts = await queryForecasts(locationQuery || undefined);
-      } catch (syncErr) {
-        console.warn("Auto-sync failed on empty database:", syncErr);
+        // Try saving in background
+        upsertForecasts(records).catch((e) => console.warn("Background upsert ignored:", e));
+
+        if (locationQuery) {
+          forecasts = records.filter((r) => r.location_name === locationQuery);
+        } else {
+          forecasts = records;
+        }
+      } catch (cwaErr) {
+        console.error("Direct CWA fetch failed:", cwaErr);
       }
     }
 

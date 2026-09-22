@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ForecastRecord } from "./types";
-import fs from "fs";
-import path from "path";
+import sampleJsonData from "@/data/sample_cwa.json";
 
 // Zod validation schemas for CWA F-C0032-001
 export const CWAElementValueSchema = z.object({
@@ -63,21 +62,16 @@ export async function fetchCwaWeather(apiKey?: string): Promise<{ data: CWARespo
       }
       console.warn(`CWA API returned status ${response.status}. Using fallback sample data.`);
     } catch (err) {
-      console.warn("Error calling CWA API, falling back to local dataset:", err);
+      console.warn("Error calling CWA API, falling back to bundled dataset:", err);
     }
   }
 
-  // Load fallback sample data from filesystem
+  // Load directly bundled sample data
   try {
-    const samplePath = path.join(process.cwd(), "src", "data", "sample_cwa.json");
-    if (fs.existsSync(samplePath)) {
-      const fileContent = fs.readFileSync(samplePath, "utf-8");
-      const sampleJson = JSON.parse(fileContent);
-      const parsed = CWAResponseSchema.parse(sampleJson);
-      return { data: parsed, isFallback: true };
-    }
-  } catch (readErr) {
-    console.error("Failed to read local fallback sample_cwa.json:", readErr);
+    const parsed = CWAResponseSchema.parse(sampleJsonData);
+    return { data: parsed, isFallback: true };
+  } catch (parseErr) {
+    console.error("Failed to parse bundled sample data:", parseErr);
   }
 
   throw new Error("無法取得中央氣象署資料，且無本地快取資料可用。請確認 CWA_API_KEY 或網路連線。");
